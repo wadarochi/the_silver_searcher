@@ -12,11 +12,12 @@ pthread_mutex_t work_queue_mtx;
 symdir_t *symhash;
 
 void search_buf(const char *buf, const int buf_len,
-                const char *dir_full_path) {
+                const char *dir_full_path,
+                int skip_binary_check ) {
     int binary = -1;  /* 1 = yes, 0 = no, -1 = don't know */
     int buf_offset = 0;
 
-    if (opts.search_stream) {
+    if (opts.search_stream || skip_binary_check) {
         binary = 0;
     } else if (!opts.search_binary_files) {
         binary = is_binary((void*) buf, buf_len);
@@ -183,7 +184,7 @@ void search_stream(FILE *stream, const char *path) {
     free(line);
 }
 
-void search_file(const char *file_full_path) {
+void search_file(const char *file_full_path, int skip_binary_check) {
     int fd;
     off_t f_len = 0;
     char *buf = NULL;
@@ -261,13 +262,13 @@ void search_file(const char *file_full_path) {
                     log_err("Cannot decompress zipped file %s", file_full_path);
                     goto cleanup;
                 }
-                search_buf(_buf, _buf_len, file_full_path);
+                search_buf(_buf, _buf_len, file_full_path, skip_binary_check );
                 free(_buf);
                 goto cleanup;
             }
         }
 
-        search_buf(buf, (int)f_len, file_full_path);
+        search_buf(buf, (int)f_len, file_full_path, skip_binary_check);
     }
 
     cleanup:;
@@ -301,7 +302,7 @@ void *search_file_worker(void *arg) {
         }
         pthread_mutex_unlock(&work_queue_mtx);
 
-        search_file(queue_item->path);
+        search_file(queue_item->path, queue_item->skip_binary_check );
         free(queue_item->path);
         free(queue_item);
     }
@@ -415,7 +416,7 @@ void search_dir(ignores *ig, const char *base_path, const char *path, const int 
             if (depth == 0 && opts.paths_len == 1) {
                 opts.print_heading = -1;
             }
-            search_file(path);
+            search_file(path, opts.file_search_regex ? 1 : 0 );
         } else {
             log_err("Error opening directory %s: %s", path, strerror(errno));
         }
@@ -456,6 +457,7 @@ void search_dir(ignores *ig, const char *base_path, const char *path, const int 
             queue_item = (work_queue_t *)ag_malloc(sizeof(work_queue_t));
             queue_item->path = dir_full_path;
             queue_item->next = NULL;
+            queue_item->skip_binary_check = (opts.file_search_regex && !opts.search_binary_files) ? 1 : 0;
             pthread_mutex_lock(&work_queue_mtx);
             if (work_queue_tail == NULL) {
                 work_queue = queue_item;

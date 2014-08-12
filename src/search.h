@@ -31,6 +31,7 @@ extern size_t skip_lookup[256];
 struct work_queue_t {
     char *path;
     struct work_queue_t *next;
+    int skip_binary_check;
 };
 typedef struct work_queue_t work_queue_t;
 
@@ -60,9 +61,10 @@ typedef struct {
 extern symdir_t *symhash;
 
 void search_buf(const char *buf, const int buf_len,
-                const char *dir_full_path);
+                const char *dir_full_path,
+                int skip_binary_check = 0 );
 void search_stream(FILE *stream, const char *path);
-void search_file(const char *file_full_path);
+void search_file(const char *file_full_path, int skip_binary_check = 0);
 
 void *search_file_worker(void*);
 
